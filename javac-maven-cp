@@ -1,0 +1,63 @@
+#!/bin/bash
+# gets, caches and adds classpath from maven to javac
+
+declare -r CACHEDIR=~/.cache/javac-maven
+[[ ! -e "$CACHEDIR" ]] && mkdir -p "$CACHEDIR"
+
+function check_dependencies() {
+	invalid=0
+	for bin in "$@"; do
+		if [[ ! -x "$(command -v "$bin")" ]]; then
+			invalid=1
+			echo "Missing $bin" > /dev/stderr
+		fi
+	done
+	return $invalid
+}
+
+check_dependencies "mvn" "xpath" "awk" "paste" "md5sum" "javac" || exit 1
+
+function get_cached_filename() {
+	filename="$1"
+	echo "$CACHEDIR/$(echo -n "$filename" | md5sum | awk '{ print $1; }')"
+}
+
+function get_mvn_classpath() {
+	pom="$1"
+	cachedfile="$(get_cached_filename "$pom")"
+
+	if [[ -e "$cachedfile" ]] && [[ "$cachedfile" -nt "$pom" ]] ; then
+		echo "CACHED" > /dev/stderr
+		cat "$cachedfile"
+		return
+	fi
+
+	(
+		# get target directories
+		get_mvn_properties "$pom" | xpath -q -e "/project/build/outputDirectory/text()|/project/build/testOutputDirectory/text()"
+
+		# get classpath from mvn
+		mvn -f"$pom" dependency:build-classpath -DincludeScope=test | awk '/Dependencies classpath:/ { getline; print; exit; }'
+	) | paste -s -d":" | tee "$cachedfile"
+}
+
+function get_mvn_properties() {
+	mvn -f"$1" help:effective-pom | awk '/[<][?]xml/ { enable = 1;} /[<][/]project[>]/ { enable = 0; print; } enable == 1 { print }'
+}
+
+function find_file_parent() {
+	declare -r filename="$1"
+	(
+		while [[ ! -e "$filename" ]] && [[ "$PWD" != "/" ]]; do
+			cd ..
+		done
+		[[ -e "$filename" ]] && echo "$PWD/$filename"
+	)
+}
+
+pom="$(find_file_parent "pom.xml")"
+if [[ -e "$pom" ]]; then
+	javac -cp "$(get_mvn_classpath "$pom")" "$@"
+else
+	javac "$@"
+fi
