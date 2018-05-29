@@ -34,7 +34,6 @@ function get_mvn_classpath() {
 	cachedfile="$(get_cached_filename "$pom")"
 
 	if [[ -e "$cachedfile" ]] && [[ "$cachedfile" -nt "$pom" ]] ; then
-		echo "CACHED" > /dev/stderr
 		cat "$cachedfile"
 		return
 	fi
@@ -64,7 +63,26 @@ function find_file_parent() {
 
 pom="$(find_file_parent "pom.xml")"
 if [[ -e "$pom" ]]; then
-	javac -cp "$(get_mvn_classpath "$pom")" "$@"
+	declare -a args
+
+	# merge classpath given from command line, cleanup
+	given_cp=""
+	while (($#)); do
+		if [[ "$1" == "-cp" ]]; then
+			shift
+			given_cp="$1"
+			shift
+			continue
+		fi
+		args+=("$1")
+		shift
+	done
+	classpath="$(get_mvn_classpath "$pom")"
+	if [[ "$given_cp" ]]; then
+		classpath="$classpath:$given_cp"
+	fi
+
+	javac -cp "$classpath" "${args[@]}"
 else
 	javac "$@"
 fi
