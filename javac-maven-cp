@@ -1,5 +1,11 @@
 #!/bin/bash
 # gets, caches and adds classpath from maven to javac
+#
+# for use with vim and Neomake set the following config-options:
+#	let g:neomake_java_maven_executable = ''
+#	let g:neomake_java_javac_executable = 'REPLACE_PATH_TO_BIN/javac-maven-cp'
+#	let g:neomake_java_enabled_makers = ['javac']
+
 
 declare -r CACHEDIR=~/.cache/javac-maven
 [[ ! -e "$CACHEDIR" ]] && mkdir -p "$CACHEDIR"
